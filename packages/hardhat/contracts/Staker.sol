@@ -7,19 +7,68 @@ import "./ExampleExternalContract.sol";
 contract Staker {
     ExampleExternalContract public exampleExternalContract;
 
+    mapping(address => uint256) public balances;
+
+    uint256 public constant threshold = 1 ether;
+
+    uint256 public deadline = block.timestamp + 72 hours;
+
+    bool public openForWithdraw = false;
+
+    event Stake(address indexed sender, uint256 amount);
+
     constructor(address exampleExternalContractAddress) {
         exampleExternalContract = ExampleExternalContract(exampleExternalContractAddress);
     }
 
-    // Collect funds in a payable `stake()` function and track individual `balances` with a mapping:
-    // (Make sure to add a `Stake(address,uint256)` event and emit it for the frontend `All Stakings` tab to display)
+    modifier notCompleted() {
+        require(!exampleExternalContract.completed(), "Staking process already completed");
+        _;
+    }
 
-    // After some `deadline` allow anyone to call an `execute()` function
-    // If the deadline has passed and the threshold is met, it should call `exampleExternalContract.complete{value: address(this).balance}()`
+    // HÀM 1: STAKE
+    function stake() public payable {
+        require(block.timestamp < deadline, "Deadline has passed");
+        require(msg.value > 0, "You need to stake some ETH");
 
-    // If the `threshold` was not met, allow everyone to call a `withdraw()` function to withdraw their balance
+        balances[msg.sender] += msg.value;
+        emit Stake(msg.sender, msg.value);
+    }
 
-    // Add a `timeLeft()` view function that returns the time left before the deadline for the frontend
+    // HÀM 2: EXECUTE
+    function execute() public notCompleted {
+        require(block.timestamp >= deadline, "Deadline has not passed yet");
 
-    // Add the `receive()` special function that receives eth and calls stake()
+        if (address(this).balance >= threshold) {
+            exampleExternalContract.complete{value: address(this).balance}();
+        } else {
+            openForWithdraw = true;
+        }
+    }
+
+    // HÀM 3: WITHDRAW
+    function withdraw() public notCompleted {
+        require(openForWithdraw, "Withdrawals are not open");
+        
+        uint256 userBalance = balances[msg.sender];
+        require(userBalance > 0, "You have no balance to withdraw");
+
+        balances[msg.sender] = 0;
+
+        (bool sent, ) = msg.sender.call{value: userBalance}("");
+        require(sent, "Failed to send Ether");
+    }
+
+    // HÀM 4: TIMELEFT
+    function timeLeft() public view returns (uint256) {
+        if (block.timestamp >= deadline) {
+            return 0;
+        }
+        return deadline - block.timestamp;
+    }
+
+    // HÀM 5: RECEIVE
+    receive() external payable {
+        stake();
+    }
 }
