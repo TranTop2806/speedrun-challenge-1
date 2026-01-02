@@ -1,7 +1,7 @@
 import * as chains from "viem/chains";
 
 export type BaseConfig = {
-  targetNetworks: readonly chains.Chain[];
+  targetNetworks: [chains.sepolia];
   pollingInterval: number;
   alchemyApiKey: string;
   rpcOverrides?: Record<number, string>;
